@@ -34,9 +34,10 @@ pip install -r requirements.txt
 NLTK data is downloaded automatically on first run. No manual step needed.
 
 ### 3. Dataset
-The `spam.csv` file is included in the repository (SMS Spam Collection Dataset).
-If you need to re-download it:
+Download the **SMS Spam Collection Dataset** from Kaggle:
 https://www.kaggle.com/datasets/uciml/sms-spam-collection-dataset
+
+Place `spam.csv` inside the project root directory.
 
 ---
 
