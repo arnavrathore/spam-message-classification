@@ -4,6 +4,8 @@ Complete end-to-end pipeline in one script
 Phases: Load → Preprocess → Feature Extract → Train → Evaluate
 """
 
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 import re
@@ -40,13 +42,40 @@ TEST_SIZE = 0.20
 MAX_FEATURES = 5000
 RF_N_ESTIMATORS = 100
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def resolve_input_path(filename: str) -> Path:
+    """Look for filename in project root first, then data/ subdirectory."""
+    candidates = [PROJECT_ROOT / filename, PROJECT_ROOT / 'data' / filename]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def ensure_nltk_data() -> None:
+    """Download required NLTK data only when not already present."""
+    resources = [('stopwords', 'stopwords'), ('punkt', 'punkt'), ('punkt_tab', 'punkt_tab')]
+    for resource_name, download_name in resources:
+        try:
+            if resource_name == 'stopwords':
+                stopwords.words('english')
+            elif resource_name == 'punkt':
+                word_tokenize('hello world')
+            else:
+                nltk.data.find('tokenizers/punkt_tab')
+        except LookupError:
+            try:
+                nltk.download(download_name, quiet=True)
+            except Exception as exc:
+                print(f"  Warning: Could not download {download_name}: {exc}")
+
+
 # Download NLTK data
-print("Downloading NLTK resources...")
-for resource in ['stopwords', 'punkt', 'punkt_tab']:
-    try:
-        nltk.download(resource, quiet=True)
-    except Exception as e:
-        print(f"  Warning: Could not download {resource}: {e}")
+print("Verifying NLTK resources...")
+ensure_nltk_data()
+print("✓ NLTK resources ready")
 
 stop_words = set(stopwords.words('english'))
 stemmer = PorterStemmer()
@@ -62,13 +91,15 @@ print("\n" + "=" * 70)
 print("PHASE 1: LOAD & EXPLORE DATA")
 print("=" * 70)
 
-print("\nLoading dataset...")
+dataset_path = resolve_input_path('spam.csv')
+print(f"\nLoading dataset from: {dataset_path}")
 try:
-    df = pd.read_csv('spam.csv', encoding='utf-8', usecols=[0, 1], header=None)
+    df = pd.read_csv(dataset_path, encoding='utf-8', usecols=[0, 1])
 except UnicodeDecodeError:
-    df = pd.read_csv('spam.csv', encoding='latin1', usecols=[0, 1], header=None)
+    df = pd.read_csv(dataset_path, encoding='latin1', usecols=[0, 1])
 except FileNotFoundError:
-    print("❌ Error: spam.csv not found in current directory")
+    print(f"❌ Error: spam.csv not found. Tried: {dataset_path}")
+    print("  Download the SMS Spam Collection Dataset and place spam.csv in the project folder.")
     raise
 
 # Assign column names
@@ -109,7 +140,7 @@ print("=" * 70)
 
 def preprocess_text(text):
     """
-    Pipeline: lowercase → remove punctuation → tokenize → 
+    Pipeline: lowercase → remove punctuation → tokenize →
               remove stopwords → stem
     """
     text = text.lower()
@@ -265,12 +296,12 @@ metrics_data = []
 for model_name, (model, X_test_features) in models.items():
     y_pred = model.predict(X_test_features)
     predictions[model_name] = y_pred
-    
+
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred, zero_division=0)
     rec = recall_score(y_test, y_pred, zero_division=0)
     f1 = f1_score(y_test, y_pred, zero_division=0)
-    
+
     metrics_data.append({
         'Model': model_name.replace('_', ' '),
         'Accuracy': f'{acc:.4f}',
@@ -294,13 +325,13 @@ for model_name, y_pred in predictions.items():
     if f1 > best_f1:
         best_f1 = f1
         best_model_name = model_name
-        
+
         acc = accuracy_score(y_test, y_pred)
         prec = precision_score(y_test, y_pred, zero_division=0)
         rec = recall_score(y_test, y_pred, zero_division=0)
         cm = confusion_matrix(y_test, y_pred)
         tn, fp, fn, tp = cm.ravel()
-        
+
         best_metrics = {
             'name': model_name,
             'accuracy': acc,
@@ -337,7 +368,7 @@ print(f"  ✗ False Negatives (Spam missed):     {best_metrics['fn']:6d}")
 # Classification report for best model
 print(f"\nClassification Report ({best_model_name}):")
 print(f"{'─' * 70}")
-print(classification_report(y_test, best_metrics['predictions'], 
+print(classification_report(y_test, best_metrics['predictions'],
                           target_names=['HAM', 'SPAM'], digits=4))
 
 # ============================================================================
@@ -353,21 +384,22 @@ for idx, (model_name, y_pred) in enumerate(predictions.items()):
     cm = confusion_matrix(y_test, y_pred)
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred, zero_division=0)
-    
+
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=['HAM', 'SPAM'],
                 yticklabels=['HAM', 'SPAM'],
                 ax=axes[idx], cbar=False,
                 annot_kws={'size': 12, 'weight': 'bold'})
-    
+
     axes[idx].set_title(f'{model_name}\nAcc: {acc:.4f} | F1: {f1:.4f}',
                        fontsize=11, fontweight='bold')
     axes[idx].set_ylabel('True Label')
     axes[idx].set_xlabel('Predicted Label')
 
 plt.tight_layout()
-plt.savefig('01_confusion_matrices_all_models.png', dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: 01_confusion_matrices_all_models.png")
+out1 = PROJECT_ROOT / 'confusion_matrices_all_models.png'
+plt.savefig(out1, dpi=300, bbox_inches='tight')
+print(f"  ✓ Saved: {out1.name}")
 plt.close()
 
 # 2. Confusion matrix for best model (large)
@@ -384,8 +416,9 @@ ax.set_title(f'{best_model_name} - Confusion Matrix\nAccuracy: {best_metrics["ac
 ax.set_ylabel('True Label', fontsize=12)
 ax.set_xlabel('Predicted Label', fontsize=12)
 plt.tight_layout()
-plt.savefig('02_confusion_matrix_best_model.png', dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: 02_confusion_matrix_best_model.png")
+out2 = PROJECT_ROOT / '02_confusion_matrix_best_model.png'
+plt.savefig(out2, dpi=300, bbox_inches='tight')
+print(f"  ✓ Saved: {out2.name}")
 plt.close()
 
 # 3. Model comparison bar chart
@@ -414,8 +447,9 @@ ax.set_ylim([0, 1.05])
 ax.grid(axis='y', alpha=0.3)
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
-plt.savefig('03_model_comparison.png', dpi=300, bbox_inches='tight')
-print(f"  ✓ Saved: 03_model_comparison.png")
+out3 = PROJECT_ROOT / 'model_comparison.png'
+plt.savefig(out3, dpi=300, bbox_inches='tight')
+print(f"  ✓ Saved: {out3.name}")
 plt.close()
 
 # ============================================================================
@@ -424,10 +458,10 @@ plt.close()
 print(f"\nSaving results...")
 
 # Save metrics to CSV
-metrics_df.to_csv('model_evaluation_summary.csv', index=False)
+metrics_df.to_csv(PROJECT_ROOT / 'model_evaluation_summary.csv', index=False)
 print(f"  ✓ Saved: model_evaluation_summary.csv")
 
-metrics_comp_df.to_csv('model_metrics_detailed.csv')
+metrics_comp_df.to_csv(PROJECT_ROOT / 'model_metrics_detailed.csv')
 print(f"  ✓ Saved: model_metrics_detailed.csv")
 
 # Save models to pickle
@@ -443,7 +477,7 @@ model_objects = {
     'best_model_name': best_model_name,
 }
 
-with open('trained_models.pkl', 'wb') as f:
+with open(PROJECT_ROOT / 'trained_models.pkl', 'wb') as f:
     pickle.dump(model_objects, f)
 print(f"  ✓ Saved: trained_models.pkl")
 
@@ -484,9 +518,9 @@ Models Trained:
   • F1-Score:  {best_metrics['f1']:.4f} (balanced metric)
 
 ✓ Outputs Generated:
-  • 01_confusion_matrices_all_models.png
+  • confusion_matrices_all_models.png
   • 02_confusion_matrix_best_model.png
-  • 03_model_comparison.png
+  • model_comparison.png
   • model_evaluation_summary.csv
   • model_metrics_detailed.csv
   • trained_models.pkl
