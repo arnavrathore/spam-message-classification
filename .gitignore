@@ -16,14 +16,17 @@ venv.bak/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Dataset files (large, regenerable)
-spam.csv
+# Generated intermediate data files (regenerable by running the pipeline)
 spam_preprocessed.csv
+spam_with_original.csv
 
-# Trained models (regenerable by running scripts)
+# Trained models and feature objects (regenerable by running scripts)
 trained_models.pkl
+feature_objects.pkl
 models/
-*.pkl
+
+# NLTK data directory if downloaded locally
+nltk_data/
 
 # OS-specific files
 .DS_Store
