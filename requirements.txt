@@ -1,0 +1,9 @@
+# Spam Message Classification - dependencies
+# Install with: pip install -r requirements.txt
+
+pandas>=2.0,<3.0
+numpy>=1.24,<3.0
+scikit-learn>=1.3,<2.0
+nltk>=3.8,<4.0
+matplotlib>=3.7,<4.0
+seaborn>=0.12,<1.0
